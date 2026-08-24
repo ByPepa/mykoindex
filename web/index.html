@@ -94,6 +94,15 @@ function nearestCell(series, lat, lon){
   series.cells.forEach(c=>{ const d=(c.lat-lat)**2+(c.lon-lon)**2; if(d<bd){bd=d; best=c;} });
   return best;
 }
+// index z jemné mřížky (aby popup seděl s barvou vrstvy)
+function sampleIndexGrid(series, bbox, lat, lon){
+  const ig=series.index_grid; if(!ig) return null;
+  const [lo0,la0,lo1,la1]=bbox;
+  let cx=Math.floor((lon-lo0)/(lo1-lo0)*ig.nx);
+  let ry=Math.floor((la1-lat)/(la1-la0)*ig.ny);   // řádek 0 = sever
+  cx=Math.max(0,Math.min(ig.nx-1,cx)); ry=Math.max(0,Math.min(ig.ny-1,ry));
+  return ig.v[ry*ig.nx+cx];
+}
 // graf: sloupce = srážky (minulost tmavě + předpověď světle), čára = vlhkost 0-1
 function chartSVG(cell, series){
   const past = cell.precip.slice().reverse();           // chronologicky: nejstarší → dnes
@@ -121,30 +130,31 @@ function chartSVG(cell, series){
     '<text x="'+(W-PR-2)+'" y="'+(PT+8)+'" font-size="9" fill="#3a6ea5" text-anchor="end">max '+pmax.toFixed(0)+' mm</text>'+
     '</svg>';
 }
-function explain(cell, series, legend){
+function explain(cell, series, legend, localIdx){
   const p=series.params, past=cell.precip.slice().reverse();
   const total=cell.precip.reduce((a,b)=>a+b,0);
+  const idx = (localIdx!=null?localIdx:cell.index);   // jemný index (sedí s barvou)
   const apiNow=apiTraj(past,p.tau_days).slice(-1)[0], moistNow=Math.min(1,apiNow/p.saturation_mm);
   const tempOK = cell.temp>=p.t_min && cell.temp<=p.t_max;
-  const v=verdictFor(cell.index, legend);
-  let txt='<b>📍 Zde:</b> index '+cell.index.toFixed(0)+'/100 — <b>'+v+'</b>'+
+  const v=verdictFor(idx, legend);
+  let txt='<b>📍 Zde:</b> index '+idx.toFixed(0)+'/100 — <b>'+v+'</b>'+
     '<div class="hist">Za '+series.window_days+' dní ~'+total.toFixed(0)+' mm · vlhkost '+
     Math.round(moistNow*100)+' % · teplota ~'+cell.temp.toFixed(0)+' °C</div>';
-  // LOKÁLNÍ odhad: projektuj zdejší index dopředu (místní vláha + les/expozice + teplota)
+  // LOKÁLNÍ odhad: škáluj zdejší index podle změny vláhy/teploty v předpovědi
   let est="";
   const fc=series.forecast;
   const GROW=50;                       // práh „příznivé pro růst" (Dá se)
-  const coreNow = moistNow*p.w_moist + tScore(cell.temp,p)*p.w_temp;
-  const terr = cell.index/Math.max(1, coreNow*100);   // místní násobek (les × expozice)
+  const coreNow = Math.max(0.05, moistNow*p.w_moist + tScore(cell.temp,p)*p.w_temp);
   if(fc){
     const full=past.concat(fc.precip);
     const api=apiTraj(full, p.tau_days);
-    let favJ=-1, peak=cell.index, soakDate=null;
+    let favJ=-1, peak=idx, soakDate=null;
     for(let j=0;j<fc.precip.length;j++){
       const gi=past.length+j;
       const mo=Math.min(1, api[gi]/p.saturation_mm);
       const tt=(fc.temp[j]==null?cell.temp:fc.temp[j]);
-      const pi=(mo*p.w_moist + tScore(tt,p)*p.w_temp)*terr*100;
+      const coreF=mo*p.w_moist + tScore(tt,p)*p.w_temp;
+      const pi=idx*coreF/coreNow;      // škáluj jemný index poměrem core (dnes → budoucí)
       if(pi>peak) peak=pi;
       if(favJ<0 && pi>=GROW){ favJ=j; }
     }
@@ -152,7 +162,7 @@ function explain(cell, series, legend){
     for(let j=0;j<fc.precip.length;j++){ const r=(fc.precip[j-1]||0)+fc.precip[j]+(fc.precip[j+1]||0);
       if(r>=p.soak_mm){ soakDate=fc.dates[j]; break; } }
 
-    if(cell.index>=GROW && tempOK){
+    if(idx>=GROW && tempOK){
       est='Podmínky jsou příznivé <b>už teď</b>. Pokud vydrží, houby tu mohou naskočit v příštích <b>~'+p.lag[0]+'–'+p.lag[1]+' dnech</b>.';
     } else if(favJ>=0){
       const d0=addDays(fc.dates[favJ],p.lag[0]), d1=addDays(fc.dates[favJ],p.lag[1]);
@@ -272,7 +282,8 @@ function explain(cell, series, legend){
       if(lat<latMin||lat>latMax||lng<lonMin||lng>lonMax) return; // jen uvnitř oblasti
       const cell = nearestCell(series, lat, lng);
       if(!cell) return;
-      const html='<div class="pop">'+explain(cell, series, data.legend)+
+      const localIdx = sampleIndexGrid(series, data.bbox, lat, lng);
+      const html='<div class="pop">'+explain(cell, series, data.legend, localIdx)+
         '<div class="chartlabel">Srážky (sloupce) &amp; vlhkost (čára) — 30 dní zpět + předpověď</div>'+
         chartSVG(cell, series)+'</div>';
       cpop.setLatLng(e.latlng).setContent(html).openOn(map);
