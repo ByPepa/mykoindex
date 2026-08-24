@@ -50,13 +50,8 @@ jobs:
           restore-keys: |
             mykoindex-data-
 
-      - name: Stáhni statické vrstvy (jen když chybí)
-        run: |
-          if [ ! -f data/dem_bbox.tif ] || [ ! -f data/worldcover_bbox.tif ]; then
-            python scripts/fetch_static.py
-          else
-            echo "DEM + les už jsou v cache, přeskočeno."
-          fi
+      - name: Stáhni statické vrstvy (přestaví se při změně oblasti)
+        run: python scripts/fetch_static.py
 
       - name: Rozhodni režim
         id: mode

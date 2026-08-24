@@ -116,6 +116,19 @@ def build_mosaic(urls, bbox, out_path, *, to_tree_fraction=False):
     return out_path, float(covered.mean())
 
 
+def _covers(path, bbox, tol=0.05) -> bool:
+    """Pokrývá už existující rastr celý bbox? (jinak se přestaví – změna oblasti)."""
+    if not path.exists():
+        return False
+    try:
+        with rasterio.open(path) as ds:
+            b = ds.bounds
+        return (b.left <= bbox[0] + tol and b.bottom <= bbox[1] + tol
+                and b.right >= bbox[2] - tol and b.top >= bbox[3] - tol)
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def main() -> int:
     cfg = load_config()
     b = cfg.bbox
@@ -123,13 +136,19 @@ def main() -> int:
     dem_out = cfg.data_dir / "dem_bbox.tif"
     wc_out = cfg.data_dir / "worldcover_bbox.tif"
 
-    print("DEM (Copernicus GLO-30) – dlaždice:")
-    _, cov = build_mosaic(dem_urls(b), b, dem_out)
-    print(f"  -> {dem_out} (pokrytí {cov*100:.0f} %)")
+    if _covers(dem_out, b):
+        print(f"DEM už pokrývá bbox → přeskočeno ({dem_out})")
+    else:
+        print("DEM (Copernicus GLO-30) – dlaždice:")
+        _, cov = build_mosaic(dem_urls(b), b, dem_out)
+        print(f"  -> {dem_out} (pokrytí {cov*100:.0f} %)")
 
-    print("Lesní maska (ESA WorldCover 2021) – dlaždice:")
-    _, cov = build_mosaic(worldcover_urls(b), b, wc_out, to_tree_fraction=True)
-    print(f"  -> {wc_out} (pokrytí {cov*100:.0f} %)")
+    if _covers(wc_out, b):
+        print(f"Les už pokrývá bbox → přeskočeno ({wc_out})")
+    else:
+        print("Lesní maska (ESA WorldCover 2021) – dlaždice:")
+        _, cov = build_mosaic(worldcover_urls(b), b, wc_out, to_tree_fraction=True)
+        print(f"  -> {wc_out} (pokrytí {cov*100:.0f} %)")
 
     print("\nV config.yaml je nastaveno:")
     print("  sources.terrain.dem_path: data/dem_bbox.tif")
