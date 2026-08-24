@@ -1,0 +1,156 @@
+# Mykoindex – konfigurace (zdroj pravdy pro parametry, ne kód)
+# Vše v lon/lat (WGS84), pokud není uvedeno jinak.
+
+# Oblast: Zlínský + Olomoucký kraj (vč. Jeseníků, Beskyd, Chřibů, Hostýnských vrchů)
+bbox: [16.65, 48.85, 18.60, 50.30]   # [lon_min, lat_min, lon_max, lat_max]
+resolution_m: 1000                    # pracovní mřížka ~1 km (jako ČHMÚ MERGE)
+
+# --- Model: ladicí páky ---
+model:
+  tau_days: 12          # exponenciální útlum API30 (dny)
+  api_saturation_mm: 60 # vážená suma [mm], při které je moisture = 1
+  api_window_days: 30   # okno pro API30
+  temp_window_days: 7   # okno pro denní průměrnou teplotu
+  w_moist: 0.55         # váha vlhkosti
+  w_temp: 0.45          # váha teploty
+  # teplotní křivka
+  t_min: 5.0            # pod tímto temp = 0
+  t_opt: 14.0           # optimum
+  t_max: 25.0           # nad tímto temp = 0
+  lapse_c_per_100m: 0.6 # výškový teplotní gradient
+  elev_ref_m: 300.0     # referenční výška pro T_local
+  # terén a les
+  aspect_base: 0.82     # aspect_factor = base + span*northness
+  aspect_span: 0.18
+  forest_base: 0.35     # forest_factor = base + span*forest01
+  forest_span: 0.65
+  # verdikty (práh na indexu 0-100)
+  verdicts:
+    - {min: 70, label: "Vyraž"}
+    - {min: 50, label: "Dá se"}
+    - {min: 32, label: "Počkej"}
+    - {min: 0,  label: "Sucho"}
+
+# --- QC měřáků (před sléváním) ---
+qc:
+  rain_min_mm: 0.0
+  rain_max_mm: 250.0
+  mad_k: 5.0            # medián ± k*1.4826*MAD
+
+# --- Slévání (conditional merging) ---
+merge:
+  idw_k: 8             # počet nejbližších stanic
+  idw_power: 2.0       # mocnina vzdálenosti
+  netatmo_days: 2      # Netatmo koriguje jen posledních N dní
+
+# --- Přepínače modulů ---
+modules:
+  forest_only: true    # aplikovat forest_factor
+  species_layer: false # druhová vrstva (smrk/dub/bříza) – volitelné
+
+# --- Předpověď „kdy porostou" (Open-Meteo, bez klíče) ---
+forecast:
+  enabled: true
+  url: "https://api.open-meteo.com/v1/forecast"
+  days: 16                    # horizont předpovědi
+  fruiting_lag_days: [7, 12]  # hřiby ~7–12 dní po vydatném dešti
+  soak_mm: 20                 # „vydatný déšť" = úhrn ≥ tolik mm během ~3 dnů
+
+# --- Zvýraznění TOP ideálních míst v lese ---
+hotspots:
+  enabled: true
+  n: 12                # kolik TOP tipů
+  min_index: 55        # jen body nad tímto indexem
+  min_forest: 0.5      # jen dostatečně zalesněné buňky
+  min_dist_km: 6       # minimální rozestup tipů (aby nebyly nakupené)
+
+# --- Popis vývoje počasí ---
+weather_summary:
+  days: 20             # okno pro textový popis
+
+# --- Historie ideálních podmínek (rolující okno) ---
+history:
+  window_days: 30      # jak dlouho držet historii (starší se maže)
+  ideal_min_score: 60  # co se počítá jako „ideální podmínky" (index ≥)
+
+# --- Houbařské lokality (vždy se vypisuje skóre) ---
+localities:
+  # Hostýnské vrchy
+  - {name: "Tesák",  lon: 17.833, lat: 49.430}
+  - {name: "Troják", lon: 17.869, lat: 49.417}
+  - {name: "Rusava", lon: 17.732, lat: 49.383}
+  - {name: "Hostýn", lon: 17.680, lat: 49.391}
+  # Beskydy
+  - {name: "Pustevny",           lon: 18.271, lat: 49.489}
+  - {name: "Velké Karlovice",    lon: 18.283, lat: 49.360}
+  - {name: "Bumbálka",           lon: 18.398, lat: 49.407}
+  # Chřiby
+  - {name: "Buchlov",            lon: 17.302, lat: 49.100}
+  # Jeseníky
+  - {name: "Praděd",             lon: 17.231, lat: 50.083}
+  - {name: "Ramzová",            lon: 17.146, lat: 50.183}
+  - {name: "Karlova Studánka",   lon: 17.307, lat: 50.074}
+  # Oderské vrchy / Nízký Jeseník
+  - {name: "Potštát",            lon: 17.617, lat: 49.635}
+  # Litovelské Pomoraví (lužní les – hřib dubový)
+  - {name: "Litovelské Pomoraví", lon: 17.076, lat: 49.720}
+
+# --- Města k popisu na mapě (vlastní štítky nad OSM) ---
+cities:
+  # Olomoucký kraj
+  - {name: "Olomouc",               lon: 17.2509, lat: 49.5938}
+  - {name: "Prostějov",             lon: 17.1116, lat: 49.4720}
+  - {name: "Přerov",                lon: 17.4509, lat: 49.4553}
+  - {name: "Šumperk",               lon: 16.9706, lat: 49.9653}
+  - {name: "Jeseník",               lon: 17.2044, lat: 50.2236}
+  - {name: "Zábřeh",                lon: 16.8722, lat: 49.8825}
+  - {name: "Uničov",                lon: 17.1219, lat: 49.7719}
+  - {name: "Hranice na Moravě",     lon: 17.7342, lat: 49.5478}
+  - {name: "Lipník nad Bečvou",     lon: 17.5883, lat: 49.5272}
+  # Zlínský kraj
+  - {name: "Zlín",                  lon: 17.6708, lat: 49.2264}
+  - {name: "Kroměříž",              lon: 17.3931, lat: 49.2978}
+  - {name: "Vsetín",                lon: 17.9959, lat: 49.3388}
+  - {name: "Uherské Hradiště",      lon: 17.4597, lat: 49.0697}
+  - {name: "Valašské Meziříčí",     lon: 17.9714, lat: 49.4719}
+  - {name: "Rožnov pod Radhoštěm",  lon: 18.1447, lat: 49.4586}
+  - {name: "Holešov",               lon: 17.5786, lat: 49.3336}
+  - {name: "Bystřice pod Hostýnem", lon: 17.6706, lat: 49.3992}
+  - {name: "Uherský Brod",          lon: 17.6469, lat: 49.0256}
+
+# --- Cesty ---
+paths:
+  data_dir: "data"     # cache stažených gridů (v .gitignore)
+  out_dir: "out"       # exporty pro frontend
+
+# --- Zdroje dat (nastavení bez tajemství; tokeny jdou přes .env) ---
+sources:
+  chmi:
+    # ČHMÚ MERGE – kombinovaný odhad srážek (radar + srážkoměry), ODIM_H5, 1h úhrn
+    merge_dir: "https://opendata.chmi.cz/meteorology/weather/radar/composite/merge1h/hdf5"
+    filename_template: "T_PASV23_C_OKPR_{dt:%Y%m%d%H}0000.hdf"
+  netatmo:
+    api_url: "https://api.netatmo.com/api/getpublicdata"
+    token_url: "https://api.netatmo.com/oauth2/token"
+    tile_deg: 0.25     # dlaždicování; větší = méně volání (velká oblast), riziko 503
+    max_tiles: 120     # pojistka proti přetížení API na obří oblasti
+  temperature:
+    # "stations" = ČHMÚ + Netatmo pozemní stanice (bez klíče, reálný čas) [default]
+    # "era5"     = ERA5-Land přes CDS (potřebuje CDS_API_KEY)
+    provider: "stations"
+    station_days: 3        # okno průměru pro ČHMÚ stanice (dny; víc = víc stažení)
+  era5:
+    variable: "2m_temperature"
+    dataset: "reanalysis-era5-land"
+  terrain:
+    # Copernicus DEM GLO-30 – výřez bboxu (stažen: python scripts/fetch_static.py)
+    dem_path: "data/dem_bbox.tif"
+  forest:
+    # ESA WorldCover 2021 – výřez bboxu (stažen: python scripts/fetch_static.py)
+    mask_path: "data/worldcover_bbox.tif"
+  gbif:
+    taxon: "Boletus"
+    genus_key: 8287374   # rod Boletus L. (GBIF backbone); null = dohledat podle jména
+    country: "CZ"        # kalibrace hlavně časová → celá ČR (v bboxu je nálezů málo)
+    year_from: 2015
+    year_to: 2025

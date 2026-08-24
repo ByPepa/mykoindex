@@ -1,0 +1,107 @@
+name: Mykoindex denně
+
+on:
+  schedule:
+    - cron: "30 4 * * *"   # každý den 04:30 UTC
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "live nebo demo"
+        default: "auto"
+        type: choice
+        options: ["auto", "live", "demo"]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Instalace závislostí
+        run: pip install -r requirements.txt
+
+      # Přetrvávající data mezi denními běhy: 30denní historie, statické vrstvy,
+      # cache MERGE (okno API30 se buduje). Klíč per-běh + restore-keys = rolling.
+      - name: Obnov data (historie + statické vrstvy + MERGE cache)
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/history
+            data/merge
+            data/chmi_now
+            data/dem_bbox.tif
+            data/worldcover_bbox.tif
+            out/history.json
+          key: mykoindex-data-${{ github.run_id }}
+          restore-keys: |
+            mykoindex-data-
+
+      - name: Stáhni statické vrstvy (jen když chybí)
+        run: |
+          if [ ! -f data/dem_bbox.tif ] || [ ! -f data/worldcover_bbox.tif ]; then
+            python scripts/fetch_static.py
+          else
+            echo "DEM + les už jsou v cache, přeskočeno."
+          fi
+
+      - name: Rozhodni režim
+        id: mode
+        env:
+          NETATMO_REFRESH_TOKEN: ${{ secrets.NETATMO_REFRESH_TOKEN }}
+          REQ: ${{ inputs.mode }}
+        run: |
+          req="${REQ:-auto}"
+          if [ "$req" = "demo" ]; then echo "flag=--demo" >> "$GITHUB_OUTPUT"
+          elif [ "$req" = "live" ]; then echo "flag=" >> "$GITHUB_OUTPUT"
+          elif [ -n "$NETATMO_REFRESH_TOKEN" ]; then echo "flag=" >> "$GITHUB_OUTPUT"
+          else echo "flag=--demo" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Spočítej index (+ zápis do historie)
+        env:
+          NETATMO_CLIENT_ID: ${{ secrets.NETATMO_CLIENT_ID }}
+          NETATMO_CLIENT_SECRET: ${{ secrets.NETATMO_CLIENT_SECRET }}
+          NETATMO_REFRESH_TOKEN: ${{ secrets.NETATMO_REFRESH_TOKEN }}
+          CDS_API_KEY: ${{ secrets.CDS_API_KEY }}
+          CDS_API_URL: ${{ secrets.CDS_API_URL }}
+        run: python scripts/run_daily.py ${{ steps.mode.outputs.flag }} -v
+
+      - name: Testy
+        run: pytest -q
+
+      - name: Připrav web ke zveřejnění
+        run: |
+          mkdir -p site/out
+          cp web/index.html site/index.html
+          cp out/localities.json site/out/
+          cp out/index.png site/out/ 2>/dev/null || true
+          cp out/ideal30.png site/out/ 2>/dev/null || true
+          cp out/history.json site/out/ 2>/dev/null || true
+          cp out/index.tif site/out/ 2>/dev/null || true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

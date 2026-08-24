@@ -1,0 +1,9 @@
+[Unit]
+Description=Spouští Mykoindex denně
+
+[Timer]
+OnCalendar=*-*-* 04:30:00 UTC
+Persistent=true      # dožene běh, když byl server vypnutý
+
+[Install]
+WantedBy=timers.target

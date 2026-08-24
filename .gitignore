@@ -1,0 +1,22 @@
+# Tajemství
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Cache stažených gridů
+data/
+!data/.gitkeep
+
+# Exporty (generují se; verzuje CI/Pages, ne git ručně)
+out/*
+!out/.gitkeep
+
+# OS
+.DS_Store

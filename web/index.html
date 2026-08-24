@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+<title>Mykoindex – podmínky pro hřiby</title>
+<link rel="stylesheet"
+  href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<style>
+  :root { --panel-bg: rgba(255,255,255,.95); --ink:#1c2a1c; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color:var(--ink); }
+  #map { position:absolute; inset:0; }
+  .panel { background:var(--panel-bg); border-radius:10px; box-shadow:0 1px 6px rgba(0,0,0,.3); padding:10px 12px; }
+  .leaflet-top.leaflet-left { max-width: min(360px, 82vw); }
+  #title { font-weight:700; font-size:15px; }
+  #title small { font-weight:400; color:#4a5a4a; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; vertical-align:middle; }
+  .badge.demo { background:#ffe08a; color:#6b4e00; }
+  .badge.live { background:#bff0c4; color:#0d5f1c; }
+  .controls { margin-top:8px; font-size:13px; display:flex; align-items:center; gap:8px; }
+  .controls input[type=range]{ flex:1; }
+  #meta { margin-top:6px; font-size:11px; color:#4a5a4a; line-height:1.35; }
+  .section { margin-top:8px; padding-top:8px; border-top:1px solid #e3e6e0; font-size:12.5px; line-height:1.42; }
+  .section b { display:block; font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:#5a6a5a; margin-bottom:2px; }
+  .toggle { margin-top:6px; font-size:13px; display:flex; align-items:center; gap:6px; cursor:pointer; }
+  .modes { margin-top:8px; font-size:12.5px; display:flex; gap:12px; }
+  .modes label { display:flex; align-items:center; gap:5px; cursor:pointer; }
+  .legend { font-size:12px; line-height:1.7; }
+  .legend .row { display:flex; align-items:center; gap:6px; }
+  .legend i { width:16px; height:12px; border-radius:2px; display:inline-block; }
+  .shroom { font-size:19px; text-shadow:0 1px 2px rgba(0,0,0,.55); }
+  .score-tip { background:var(--panel-bg); border:none; box-shadow:0 1px 3px rgba(0,0,0,.35);
+    border-radius:6px; font-weight:700; font-size:11.5px; padding:2px 6px; }
+  .score-tip.v-vyraz{color:#0d5f1c;} .score-tip.v-dase{color:#3c7d1a;}
+  .score-tip.v-pockej{color:#8a6d00;} .score-tip.v-sucho{color:#a52820;}
+  .city-label { color:#222; font-weight:600; font-size:11.5px; text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 3px #fff; white-space:nowrap; }
+  .pop b { font-size:13px; } .pop .hist { margin-top:4px; font-size:11.5px; color:#4a5a4a; }
+  .disclaimer { position:absolute; bottom:8px; left:8px; right:8px; z-index:1000;
+    background:rgba(28,42,28,.82); color:#fff; font-size:11px; padding:6px 10px; border-radius:8px; max-width:680px; }
+  @media (max-width:600px){ .disclaimer{ font-size:10px; } #title{ font-size:14px; } }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="disclaimer" id="disclaimer">
+  Model odhaduje <b>podmínky</b> pro růst, ne přítomnost hub. Družice nevidí pod koruny – jde o pravděpodobnost, ne jistotu.
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const DATA_BASES = ["../out/", "./out/", "out/"];
+function verdictClass(v){ return v==="Vyraž"?"v-vyraz":v==="Dá se"?"v-dase":v==="Počkej"?"v-pockej":"v-sucho"; }
+
+async function loadJSON(name){
+  for (const base of DATA_BASES){
+    try { const r = await fetch(base+name, {cache:"no-store"});
+      if (r.ok){ window.__BASE = base; return await r.json(); } } catch(e){}
+  }
+  throw new Error("Nenačetl jsem "+name+" (spusť: python scripts/run_daily.py --demo)");
+}
+
+// mini sparkline z 30denní timeline (skóre 0-100)
+function sparkline(tl){
+  if(!tl || tl.length<2) return "";
+  const w=150,h=34,pad=3;
+  const xs=(i)=>pad+i*(w-2*pad)/(tl.length-1);
+  const ys=(v)=>h-pad-(v/100)*(h-2*pad);
+  const pts=tl.map((p,i)=>xs(i)+","+ys(p.score)).join(" ");
+  const last=tl[tl.length-1];
+  return '<svg width="'+w+'" height="'+h+'" style="margin-top:4px">'+
+    '<line x1="'+pad+'" y1="'+ys(60)+'" x2="'+(w-pad)+'" y2="'+ys(60)+'" stroke="#2ecc40" stroke-dasharray="2 2" stroke-width="1"/>'+
+    '<polyline points="'+pts+'" fill="none" stroke="#3a6ea5" stroke-width="1.6"/>'+
+    '<circle cx="'+xs(tl.length-1)+'" cy="'+ys(last.score)+'" r="2.4" fill="#1c2a1c"/></svg>';
+}
+
+(async function(){
+  const map = L.map("map", {zoomControl:true}).setView([49.55, 17.6], 9);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    { maxZoom: 18, attribution: "© OpenStreetMap" }).addTo(map);
+
+  let data;
+  try { data = await loadJSON("localities.json"); }
+  catch(err){ L.control().addTo(map).onAdd = ()=>{ const d=L.DomUtil.create("div","panel");
+      d.innerHTML="<b>Chybí data.</b><br>"+err.message; return d; }; return; }
+
+  const BASE = window.__BASE||"../out/";
+  const [lonMin,latMin,lonMax,latMax] = data.bbox;
+  const bounds = [[latMin,lonMin],[latMax,lonMax]];
+  const hist = data.history||{};
+
+  // dva overlaye: dnešní index + nedávno ideálně (30 dní)
+  const todayOv = L.imageOverlay(BASE+(data.overlay||"index.png"), bounds, {opacity:0.72, interactive:false});
+  const idealOv = hist.overlay ? L.imageOverlay(BASE+hist.overlay, bounds, {opacity:0.72, interactive:false}) : null;
+  let current = todayOv.addTo(map);
+
+  const fit = ()=>{ map.invalidateSize(); map.fitBounds(bounds, {padding:[10,10]}); };
+  fit(); setTimeout(fit, 300); window.addEventListener("resize", fit);
+
+  // vrstva TOP tipů
+  const hotLayer = L.layerGroup();
+  (data.hotspots||[]).forEach(h=>{
+    L.circleMarker([h.lat,h.lon], {radius:7, color:"#0d5f1c", weight:2, fillColor:"#2ecc40", fillOpacity:0.9})
+      .bindPopup("<b>TOP tip v lese</b><br>Skóre: "+h.score+"/100 · "+h.verdict).addTo(hotLayer);
+  });
+  hotLayer.addTo(map);
+
+  // --- horní panel ---
+  const info = L.control({position:"topleft"});
+  info.onAdd = function(){
+    const d = L.DomUtil.create("div","panel");
+    const live = data.mode === "live";
+    const badge = live ? '<span class="badge live">OSTRÁ DATA</span>' : '<span class="badge demo">DEMO / ILUSTRACE</span>';
+    const modeSel = idealOv ?
+      '<div class="modes"><label><input type="radio" name="ov" value="today" checked> Dnešní index</label>'+
+      '<label><input type="radio" name="ov" value="ideal"> Nedávno ideálně ('+hist.n_days+' dní)</label></div>' : '';
+    d.innerHTML =
+      '<div id="title">🍄 Mykoindex '+badge+'<br><small>Zlínský + Olomoucký kraj</small></div>'+
+      '<div class="controls"><span>Průhlednost</span><input id="op" type="range" min="0" max="100" value="72"></div>'+
+      modeSel +
+      '<label class="toggle"><input id="hot" type="checkbox" checked> 🎯 TOP tipy v lese ('+(data.hotspots||[]).length+')</label>'+
+      (data.weather_summary?'<div class="section"><b>Počasí za 20 dní</b>'+data.weather_summary+'</div>':'')+
+      (data.forecast?'<div class="section"><b>Odhad „kdy porostou"</b>'+data.forecast+'</div>':'')+
+      '<div id="meta"></div>';
+    L.DomEvent.disableClickPropagation(d); L.DomEvent.disableScrollPropagation(d);
+    return d;
+  };
+  info.addTo(map);
+  document.getElementById("op").addEventListener("input", e=>current.setOpacity(e.target.value/100));
+  document.getElementById("hot").addEventListener("change", e=>{ e.target.checked?hotLayer.addTo(map):map.removeLayer(hotLayer); });
+  document.querySelectorAll('input[name=ov]').forEach(r=>r.addEventListener("change", e=>{
+    const op = document.getElementById("op").value/100;
+    map.removeLayer(current);
+    current = (e.target.value==="ideal"?idealOv:todayOv).setOpacity(op).addTo(map);
+  }));
+
+  const srcTxt = Object.entries(data.sources_used||{}).map(([k,v])=>k+": "+v).join(" · ");
+  document.getElementById("meta").innerHTML =
+    "Aktualizováno: "+(data.generated_utc||"?").replace("T"," ").replace("+00:00"," UTC")+
+    "<br>Index: min "+data.stats.min+" · průměr "+data.stats.mean+" · max "+data.stats.max+
+    (hist.n_days?("<br>Historie: "+hist.n_days+" z "+hist.window_days+" dní"):"")+
+    (srcTxt? "<br>Zdroje: "+srcTxt : "");
+
+  // --- legenda ---
+  const legend = L.control({position:"bottomright"});
+  legend.onAdd = function(){
+    const d = L.DomUtil.create("div","panel legend");
+    let html = "<b>Mykoindex</b>";
+    (data.legend||[]).forEach(l=>{ html += '<div class="row"><i style="background:'+l.color+'"></i>'+l.label+' ('+l.min+'+)</div>'; });
+    html += '<div class="row" style="margin-top:4px"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#2ecc40;border:2px solid #0d5f1c"></span> TOP tip</div>';
+    d.innerHTML = html; return d;
+  };
+  legend.addTo(map);
+
+  // --- pojmenované lokality (živé skóre + historie) ---
+  (data.localities||[]).forEach(l=>{
+    const icon = L.divIcon({className:"", html:'<div class="shroom">🍄</div>', iconSize:[22,22], iconAnchor:[11,11]});
+    let hh = "";
+    if (l.ideal_days !== undefined){
+      const ago = (l.last_ideal_days_ago===null||l.last_ideal_days_ago===undefined) ? "nebylo"
+        : (l.last_ideal_days_ago===0?"dnes":("před "+l.last_ideal_days_ago+" dny"));
+      hh = '<div class="hist">Ideálně '+l.ideal_days+"/"+(hist.window_days||30)+" dní · naposledy "+ago+"</div>";
+    }
+    L.marker([l.lat,l.lon],{icon}).addTo(map)
+      .bindTooltip(l.name+": "+l.score+" · "+l.verdict,
+        {permanent:true, direction:"top", className:"score-tip "+verdictClass(l.verdict), offset:[0,-9]})
+      .bindPopup('<div class="pop"><b>'+l.name+'</b><br>Skóre: '+l.score+"/100 · <b>"+l.verdict+"</b>"+hh+sparkline(l.timeline)+"</div>");
+  });
+
+  // --- štítky měst ---
+  (data.cities||[]).forEach(c=>{
+    L.marker([c.lat,c.lon],{ icon:L.divIcon({className:"", html:'<div class="city-label">'+c.name+'</div>', iconSize:[0,0]}),
+      interactive:false, keyboard:false }).addTo(map);
+  });
+
+  if (data.disclaimer) document.getElementById("disclaimer").innerHTML = data.disclaimer;
+})();
+</script>
+</body>
+</html>

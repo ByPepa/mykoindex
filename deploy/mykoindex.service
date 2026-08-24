@@ -1,0 +1,12 @@
+[Unit]
+Description=Mykoindex – denní výpočet a publikace
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# uprav cesty a uživatele podle serveru
+WorkingDirectory=/opt/mykoindex
+Environment=MYKOINDEX_WEBROOT=/var/www/mykoindex
+ExecStart=/opt/mykoindex/deploy/run_and_publish.sh
+User=www-data

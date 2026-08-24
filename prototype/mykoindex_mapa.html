@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mykoindex – prototyp mapy (generované pole)</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<style>
+  html,body{margin:0;height:100%} #map{position:absolute;inset:0}
+  .panel{background:#fff;padding:8px 10px;border-radius:8px;box-shadow:0 1px 5px rgba(0,0,0,.3);font:13px system-ui}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+// PROTOTYP: pole indexu se generuje přímo v prohlížeči (ilustrace).
+// Ostrá mapa web/index.html místo toho načítá out/index.png + out/localities.json.
+const BBOX=[17.50,49.15,18.00,49.62];
+const N=48;
+function genField(){
+  const g=[];
+  for(let j=0;j<N;j++){const row=[];for(let i=0;i<N;i++){
+    const lon=BBOX[0]+(i+.5)/N*(BBOX[2]-BBOX[0]);
+    const lat=BBOX[1]+(j+.5)/N*(BBOX[3]-BBOX[1]);
+    const hill=Math.exp(-(((lon-17.85)**2)/0.02+((lat-49.45)**2)/0.02));
+    row.push(Math.max(0,Math.min(100, 30+60*hill+8*Math.sin(lon*30)*Math.cos(lat*30))));
+  } g.push(row);} return g;
+}
+function color(v){const t=v/100;const r=Math.round(160-140*t),gr=Math.round(130+50*t),b=Math.round(95-70*t);
+  return `rgba(${r},${gr},${b},${0.3+0.5*t})`;}
+
+const map=L.map("map").setView([49.4,17.78],11);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap"}).addTo(map);
+const field=genField();
+for(let j=0;j<N;j++)for(let i=0;i<N;i++){
+  const lon0=BBOX[0]+i/N*(BBOX[2]-BBOX[0]), lat0=BBOX[1]+j/N*(BBOX[3]-BBOX[1]);
+  const lon1=BBOX[0]+(i+1)/N*(BBOX[2]-BBOX[0]), lat1=BBOX[1]+(j+1)/N*(BBOX[3]-BBOX[1]);
+  L.rectangle([[lat0,lon0],[lat1,lon1]],{stroke:false,fillColor:color(field[j][i]),fillOpacity:1,interactive:false}).addTo(map);
+}
+const info=L.control(); info.onAdd=()=>{const d=L.DomUtil.create("div","panel");
+  d.innerHTML="<b>🍄 Mykoindex – PROTOTYP</b><br>Pole je generované, jen ilustrace."; return d;};
+info.addTo(map);
+map.fitBounds([[BBOX[1],BBOX[0]],[BBOX[3],BBOX[2]]]);
+</script>
+</body>
+</html>
