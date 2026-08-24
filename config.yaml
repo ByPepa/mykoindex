@@ -1,8 +1,8 @@
 # Mykoindex – konfigurace (zdroj pravdy pro parametry, ne kód)
 # Vše v lon/lat (WGS84), pokud není uvedeno jinak.
 
-# Oblast: Zlínský + Olomoucký kraj (vč. Jeseníků, Beskyd, Chřibů, Hostýnských vrchů)
-bbox: [16.65, 48.85, 18.60, 50.30]   # [lon_min, lat_min, lon_max, lat_max]
+# Oblast: celá Česká republika
+bbox: [12.0, 48.5, 18.9, 51.1]        # [lon_min, lat_min, lon_max, lat_max]
 resolution_m: 1000                    # pracovní mřížka ~1 km (jako ČHMÚ MERGE)
 
 # --- Model: ladicí páky ---
@@ -73,50 +73,51 @@ history:
   window_days: 30      # jak dlouho držet historii (starší se maže)
   ideal_min_score: 60  # co se počítá jako „ideální podmínky" (index ≥)
 
-# --- Houbařské lokality (vždy se vypisuje skóre) ---
+# --- Houbařské lokality (vždy se vypisuje skóre) – napříč ČR ---
 localities:
-  # Hostýnské vrchy
-  - {name: "Tesák",  lon: 17.833, lat: 49.430}
-  - {name: "Troják", lon: 17.869, lat: 49.417}
-  - {name: "Rusava", lon: 17.732, lat: 49.383}
-  - {name: "Hostýn", lon: 17.680, lat: 49.391}
-  # Beskydy
-  - {name: "Pustevny",           lon: 18.271, lat: 49.489}
-  - {name: "Velké Karlovice",    lon: 18.283, lat: 49.360}
-  - {name: "Bumbálka",           lon: 18.398, lat: 49.407}
-  # Chřiby
-  - {name: "Buchlov",            lon: 17.302, lat: 49.100}
-  # Jeseníky
-  - {name: "Praděd",             lon: 17.231, lat: 50.083}
-  - {name: "Ramzová",            lon: 17.146, lat: 50.183}
-  - {name: "Karlova Studánka",   lon: 17.307, lat: 50.074}
-  # Oderské vrchy / Nízký Jeseník
-  - {name: "Potštát",            lon: 17.617, lat: 49.635}
-  # Litovelské Pomoraví (lužní les – hřib dubový)
-  - {name: "Litovelské Pomoraví", lon: 17.076, lat: 49.720}
+  # Čechy
+  - {name: "Šumava (Kubova Huť)",   lon: 13.610, lat: 49.045}
+  - {name: "Brdy",                  lon: 13.870, lat: 49.700}
+  - {name: "Křivoklátsko",          lon: 13.872, lat: 50.040}
+  - {name: "Slavkovský les",        lon: 12.750, lat: 50.050}
+  - {name: "Český les",             lon: 12.650, lat: 49.550}
+  - {name: "Kokořínsko",            lon: 14.570, lat: 50.450}
+  - {name: "Lužické hory",          lon: 14.620, lat: 50.850}
+  - {name: "Jizerské hory",         lon: 15.200, lat: 50.850}
+  - {name: "Krkonoše (Špindl.)",    lon: 15.610, lat: 50.730}
+  - {name: "Orlické hory",          lon: 16.450, lat: 50.300}
+  - {name: "Broumovsko",            lon: 16.330, lat: 50.580}
+  - {name: "Novohradské hory",      lon: 14.780, lat: 48.660}
+  - {name: "Žďárské vrchy",         lon: 16.030, lat: 49.670}
+  # Morava a Slezsko
+  - {name: "Jeseníky (Praděd)",     lon: 17.231, lat: 50.083}
+  - {name: "Beskydy (Pustevny)",    lon: 18.271, lat: 49.489}
+  - {name: "Hostýnské vrchy (Tesák)", lon: 17.833, lat: 49.430}
+  - {name: "Chřiby (Buchlov)",      lon: 17.302, lat: 49.100}
+  - {name: "Litovelské Pomoraví",   lon: 17.076, lat: 49.720}
 
-# --- Města k popisu na mapě (vlastní štítky nad OSM) ---
+# --- Města k popisu na mapě (vlastní štítky nad OSM) – hlavní města ČR ---
 cities:
-  # Olomoucký kraj
-  - {name: "Olomouc",               lon: 17.2509, lat: 49.5938}
-  - {name: "Prostějov",             lon: 17.1116, lat: 49.4720}
-  - {name: "Přerov",                lon: 17.4509, lat: 49.4553}
-  - {name: "Šumperk",               lon: 16.9706, lat: 49.9653}
-  - {name: "Jeseník",               lon: 17.2044, lat: 50.2236}
-  - {name: "Zábřeh",                lon: 16.8722, lat: 49.8825}
-  - {name: "Uničov",                lon: 17.1219, lat: 49.7719}
-  - {name: "Hranice na Moravě",     lon: 17.7342, lat: 49.5478}
-  - {name: "Lipník nad Bečvou",     lon: 17.5883, lat: 49.5272}
-  # Zlínský kraj
-  - {name: "Zlín",                  lon: 17.6708, lat: 49.2264}
-  - {name: "Kroměříž",              lon: 17.3931, lat: 49.2978}
-  - {name: "Vsetín",                lon: 17.9959, lat: 49.3388}
-  - {name: "Uherské Hradiště",      lon: 17.4597, lat: 49.0697}
-  - {name: "Valašské Meziříčí",     lon: 17.9714, lat: 49.4719}
-  - {name: "Rožnov pod Radhoštěm",  lon: 18.1447, lat: 49.4586}
-  - {name: "Holešov",               lon: 17.5786, lat: 49.3336}
-  - {name: "Bystřice pod Hostýnem", lon: 17.6706, lat: 49.3992}
-  - {name: "Uherský Brod",          lon: 17.6469, lat: 49.0256}
+  - {name: "Praha",             lon: 14.4208, lat: 50.0880}
+  - {name: "Brno",              lon: 16.6068, lat: 49.1951}
+  - {name: "Ostrava",           lon: 18.2925, lat: 49.8209}
+  - {name: "Plzeň",             lon: 13.3776, lat: 49.7475}
+  - {name: "Olomouc",           lon: 17.2509, lat: 49.5938}
+  - {name: "Liberec",           lon: 15.0562, lat: 50.7663}
+  - {name: "České Budějovice",  lon: 14.4747, lat: 48.9747}
+  - {name: "Hradec Králové",    lon: 15.8327, lat: 50.2103}
+  - {name: "Pardubice",         lon: 15.7766, lat: 50.0343}
+  - {name: "Ústí nad Labem",    lon: 14.0417, lat: 50.6607}
+  - {name: "Zlín",              lon: 17.6708, lat: 49.2264}
+  - {name: "Jihlava",           lon: 15.5906, lat: 49.3961}
+  - {name: "Karlovy Vary",      lon: 12.8710, lat: 50.2320}
+  - {name: "Šumperk",           lon: 16.9706, lat: 49.9653}
+  - {name: "Znojmo",            lon: 16.0488, lat: 48.8555}
+  - {name: "Tábor",             lon: 14.6578, lat: 49.4145}
+  - {name: "Trutnov",           lon: 15.9124, lat: 50.5608}
+  - {name: "Cheb",              lon: 12.3705, lat: 50.0796}
+  - {name: "Klatovy",           lon: 13.2952, lat: 49.3955}
+  - {name: "Frýdek-Místek",     lon: 18.3486, lat: 49.6835}
 
 # --- Cesty ---
 paths:
@@ -134,6 +135,9 @@ sources:
     token_url: "https://api.netatmo.com/oauth2/token"
     tile_deg: 0.3      # dlaždicování; větší = méně volání (velká oblast), riziko 503
     max_tiles: 120     # pojistka proti přetížení API na obří oblasti
+    # Netatmo jen pro domovské okresy (Zlínsko/Olomoucko); zbytek ČR nese ČHMÚ.
+    # Korekce se aplikuje jen uvnitř tohoto bboxu (viz merge maskování).
+    bbox: [16.65, 48.85, 18.60, 50.30]
   temperature:
     # "stations" = ČHMÚ + Netatmo pozemní stanice (bez klíče, reálný čas) [default]
     # "era5"     = ERA5-Land přes CDS (potřebuje CDS_API_KEY)

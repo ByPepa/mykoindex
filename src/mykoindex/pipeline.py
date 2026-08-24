@@ -38,16 +38,19 @@ def _apply_netatmo_correction(cfg, grid, daily, mode, sources_used, radar_truth=
     qc_cfg = cfg.qc
     m_cfg = cfg.merge
 
+    # Netatmo jen pro domovské okresy (zbytek ČR nese ČHMÚ)
+    nbbox = cfg.sources.get("netatmo", {}).get("bbox") or cfg.bbox
+
     if mode == "demo":
         stations = netatmo.synthetic(cfg, truth_field=radar_truth, grid=grid)
         sources_used["netatmo"] = "synthetic"
     else:
-        st = netatmo.fetch(cfg)
+        st = netatmo.fetch(cfg, bbox=nbbox)
         if st is None:
             sources_used["netatmo"] = "unavailable"
             return daily
         stations = st
-        sources_used["netatmo"] = f"live ({len(st)} stanic)"
+        sources_used["netatmo"] = f"live ({len(st)} stanic, jen Zlín+Olomouc)"
 
     qc = qc_gauges(
         stations.rain,
@@ -65,13 +68,18 @@ def _apply_netatmo_correction(cfg, grid, daily, mode, sources_used, radar_truth=
     slat = stations.lats[keep]
     sval = stations.rain[keep]
 
+    # maska: Netatmo korekci aplikuj jen uvnitř jeho bboxu (jinde zůstane čistý radar)
+    LON, LAT = grid.meshgrid()
+    inside = (LON >= nbbox[0]) & (LON <= nbbox[2]) & (LAT >= nbbox[1]) & (LAT <= nbbox[3])
+
     daily = daily.copy()
     for d in range(min(ndays, daily.shape[0])):
-        daily[d] = conditional_merge(
+        merged = conditional_merge(
             daily[d], grid, slon, slat, sval,
             idw_k=int(m_cfg.get("idw_k", 8)),
             idw_power=float(m_cfg.get("idw_power", 2.0)),
         )
+        daily[d] = np.where(inside, merged, daily[d])
     return daily
 
 

@@ -3,6 +3,21 @@
 Doplňky tam, kde SPEC.md nechal prostor. Zdroj pravdy zůstává `SPEC.md`
 (sekce Model + Akceptační kritéria); zde je jen to, co bylo dorozhodnuto.
 
+## Rozšíření na celou ČR (hybrid ČHMÚ + regionální Netatmo)
+- bbox `[12.0, 48.5, 18.9, 51.1]` (celá ČR), mřížka ~1 km → ~287×496 buněk.
+- **Páteř = ČHMÚ** (národní): MERGE srážky 1 km + profesionální teplotní stanice
+  po celé ČR (`fetch_chmi`, stovky stanic, stahování **paralelně** přes
+  ThreadPoolExecutor, ať denní běh nenaroste).
+- **Netatmo jen pro domovské okresy** (`sources.netatmo.bbox` = Zlínsko/Olomoucko).
+  Důvod: celá ČR = ~200 dlaždic × 2 → rate-limit + pomalé. Korekce srážek se
+  **maskuje** jen na tento bbox (`pipeline`: `np.where(inside, merged, radar)`),
+  jinde čistý MERGE. Netatmo teploty taky jen z tohoto bboxu.
+- **DEM + les**: `fetch_static` RES 100 m → **200 m** (nad ČR únosná paměť),
+  mozaika ~28 dlaždic DEM + ~4 WorldCover.
+- **series.json** (klik): jemná mřížka indexu se pro web **zředí** (max ~320 buněk
+  na stranu ~ 2 km), coarse srážková mřížka `ncx` 18→28. JSON zůstává ~200 KB.
+- Města = hlavní města ČR, lokality = houbařské oblasti napříč republikou.
+
 ## Rozšíření na Zlínský + Olomoucký kraj
 - bbox rozšířen na `[16.65, 48.85, 18.60, 50.30]` (~130×160 km, vč. Jeseníků,
   Beskyd, Chřibů, Hostýnských vrchů). 13 lokalit, 18 měst.

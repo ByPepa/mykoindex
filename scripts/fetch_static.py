@@ -27,7 +27,7 @@ from rasterio.windows import from_bounds as win_from_bounds
 
 from mykoindex.config import load_config
 
-RES = 0.0009  # cílové rozlišení mozaiky ~100 m
+RES = 0.0018  # cílové rozlišení mozaiky ~200 m (pro celou ČR únosné, na 1km mřížku stačí)
 
 
 def dem_urls(bbox, margin=0.1):

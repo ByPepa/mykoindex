@@ -47,7 +47,7 @@ def find_hotspots(index_field, forest01, grid, cfg) -> list[dict]:
     return selected
 
 
-def build_series(cfg, grid, daily_stack, index_field, t_local, forecast, ncx: int = 18) -> dict:
+def build_series(cfg, grid, daily_stack, index_field, t_local, forecast, ncx: int = 28) -> dict:
     """Hrubá mřížka časových řad pro klik na mapě: 30denní srážky + index + teplota
     + předpověď + parametry. Umožní frontendu spočítat vlhkost a odhad pro libovolný bod.
     """
@@ -91,9 +91,12 @@ def build_series(cfg, grid, daily_stack, index_field, t_local, forecast, ncx: in
         "soak_mm": float(fc.get("soak_mm", 20)), "lag": fc.get("fruiting_lag_days", [7, 12]),
         "ideal_min": float(cfg.raw.get("history", {}).get("ideal_min_score", 60)),
     }
-    # jemná mřížka indexu (aby popup po kliku seděl s barvou vrstvy, ne hrubý průměr)
+    # mřížka indexu pro klik (aby popup seděl s barvou vrstvy); pro web zředěná,
+    # ať JSON zůstane svižný i pro ČR (max ~320 buněk na stranu → ~2 km).
     ig = np.clip(np.nan_to_num(index_field, nan=0.0), 0, 100).round().astype(int)
-    index_grid = {"nx": int(grid.nx), "ny": int(grid.ny), "v": ig.flatten().tolist()}
+    stride = max(1, int(np.ceil(max(grid.nx, grid.ny) / 320)))
+    igs = ig[::stride, ::stride]
+    index_grid = {"nx": int(igs.shape[1]), "ny": int(igs.shape[0]), "v": igs.flatten().tolist()}
 
     return {"ncx": ncx, "ncy": ncy, "window_days": D, "cells": cells,
             "forecast": fcast, "params": params, "index_grid": index_grid}

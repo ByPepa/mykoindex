@@ -91,8 +91,11 @@ def fetch_chmi(cfg, days: int = 3, margin_deg: float = 0.4) -> TempStations | No
 
     cache_dir = cfg.data_dir / "chmi_now"
     cache_dir.mkdir(parents=True, exist_ok=True)
-    rows = []
-    for wsi, (lon, lat, elev) in near.items():
+    import json
+    from concurrent.futures import ThreadPoolExecutor
+
+    def _station(item):
+        wsi, (lon, lat, elev) = item
         temps = []
         for di in range(days):
             d = end - timedelta(days=di)
@@ -107,10 +110,7 @@ def fetch_chmi(cfg, days: int = 3, margin_deg: float = 0.4) -> TempStations | No
                         continue
                     payload = r.content
                     cache.write_bytes(payload)
-                import json
-
-                vals = json.loads(payload)["data"]["data"]["values"]
-                for v in vals:
+                for v in json.loads(payload)["data"]["data"]["values"]:
                     if v[1] == "T" and v[3] is not None:
                         try:
                             temps.append(float(v[3]))
@@ -118,8 +118,11 @@ def fetch_chmi(cfg, days: int = 3, margin_deg: float = 0.4) -> TempStations | No
                             pass
             except Exception as exc:  # noqa: BLE001
                 log.debug("chmi T %s %s: %s", wsi, d, exc)
-        if temps:
-            rows.append((lon, lat, elev, float(np.mean(temps))))
+        return (lon, lat, elev, float(np.mean(temps))) if temps else None
+
+    # národní síť má stovky stanic → paralelně (jen HTTP GETy)
+    with ThreadPoolExecutor(max_workers=12) as ex:
+        rows = [r for r in ex.map(_station, list(near.items())) if r is not None]
 
     if not rows:
         return None
@@ -143,7 +146,8 @@ def fetch_netatmo(cfg) -> TempStations | None:
     rows = []
     import time
 
-    tiles = list(_tiles(cfg.bbox, tile))
+    nbbox = cfg.sources.get("netatmo", {}).get("bbox") or cfg.bbox
+    tiles = list(_tiles(nbbox, tile))
     if len(tiles) > max_tiles:
         log.warning("netatmo teplota: %d dlaždic > max_tiles=%d → omezuji", len(tiles), max_tiles)
         tiles = tiles[:max_tiles]
