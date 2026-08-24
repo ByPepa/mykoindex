@@ -15,6 +15,12 @@
   .leaflet-top.leaflet-left { max-width: min(360px, 82vw); }
   #title { font-weight:700; font-size:15px; }
   #title small { font-weight:400; color:#4a5a4a; }
+  #cog { float:right; border:none; background:#eef2ec; color:#2a3a2a; border-radius:7px;
+    cursor:pointer; font-size:15px; line-height:1; padding:4px 8px; margin:-2px -2px 0 8px; }
+  #cog:hover { background:#dde5db; }
+  .panel.collapsed .pbody { display:none; }
+  .panel.collapsed #title small { display:none; }
+  .panel.collapsed #title br { display:none; }
   .badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; vertical-align:middle; }
   .badge.demo { background:#ffe08a; color:#6b4e00; }
   .badge.live { background:#bff0c4; color:#0d5f1c; }
@@ -215,18 +221,26 @@ function explain(cell, series, legend, localIdx){
     const modeSel = idealOv ?
       '<div class="modes"><label><input type="radio" name="ov" value="today" checked> Dnešní index</label>'+
       '<label><input type="radio" name="ov" value="ideal"> Nedávno ideálně ('+hist.n_days+' dní)</label></div>' : '';
+    d.id = "infopanel";
     d.innerHTML =
-      '<div id="title">🍄 Mykoindex '+badge+'<br><small>Zlínský + Olomoucký kraj</small></div>'+
-      '<div class="controls"><span>Průhlednost</span><input id="op" type="range" min="0" max="100" value="72"></div>'+
-      modeSel +
-      '<label class="toggle"><input id="hot" type="checkbox" checked> 🎯 TOP tipy v lese ('+(data.hotspots||[]).length+')</label>'+
-      (data.weather_summary?'<div class="section"><b>Počasí za 20 dní</b>'+data.weather_summary+'</div>':'')+
-      (data.forecast?'<div class="section"><b>Odhad „kdy porostou"</b>'+data.forecast+'</div>':'')+
-      '<div id="meta"></div>';
+      '<div id="title"><button id="cog" title="Skrýt/zobrazit panel">⚙</button>🍄 Mykoindex '+badge+'<br><small>Zlínský + Olomoucký kraj</small></div>'+
+      '<div class="pbody">'+
+        '<div class="controls"><span>Průhlednost</span><input id="op" type="range" min="0" max="100" value="72"></div>'+
+        modeSel +
+        '<label class="toggle"><input id="hot" type="checkbox" checked> 🎯 TOP tipy v lese ('+(data.hotspots||[]).length+')</label>'+
+        (data.weather_summary?'<div class="section"><b>Počasí za 20 dní</b>'+data.weather_summary+'</div>':'')+
+        (data.forecast?'<div class="section"><b>Odhad „kdy porostou"</b>'+data.forecast+'</div>':'')+
+        '<div id="meta"></div>'+
+      '</div>';
     L.DomEvent.disableClickPropagation(d); L.DomEvent.disableScrollPropagation(d);
     return d;
   };
   info.addTo(map);
+  // sbalovací panel (⚙) – na mobilu sbalený hned, ať je vidět mapa
+  const panelEl=document.getElementById("infopanel"), cog=document.getElementById("cog");
+  function setCollapsed(c){ panelEl.classList.toggle("collapsed", c); cog.textContent = c ? "⚙" : "✕"; }
+  cog.addEventListener("click", ()=> setCollapsed(!panelEl.classList.contains("collapsed")));
+  setCollapsed(window.innerWidth < 640);   // na mobilu sbaleno, na desktopu rozbaleno
   document.getElementById("op").addEventListener("input", e=>current.setOpacity(e.target.value/100));
   document.getElementById("hot").addEventListener("change", e=>{ e.target.checked?hotLayer.addTo(map):map.removeLayer(hotLayer); });
   document.querySelectorAll('input[name=ov]').forEach(r=>r.addEventListener("change", e=>{
