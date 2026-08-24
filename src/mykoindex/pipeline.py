@@ -29,6 +29,7 @@ class PipelineResult:
     hotspots: list = field(default_factory=list)
     weather_summary: str = ""
     forecast_text: str = ""
+    series: dict = field(default_factory=dict)
 
 
 def _apply_netatmo_correction(cfg, grid, daily, mode, sources_used, radar_truth=None):
@@ -178,10 +179,11 @@ def run(cfg: Config | None = None, *, demo: bool = False, day: date | None = Non
     fc_text = analysis.forecast_text(
         cfg, fc, float(np.nanmean(api)), float(np.nanmean(t_local))
     )
+    series = analysis.build_series(cfg, grid, daily, index_field, t_local, fc)
 
     return PipelineResult(
         grid=grid, index=index_field, mode=mode, sources_used=sources_used,
-        hotspots=hotspots, weather_summary=weather, forecast_text=fc_text,
+        hotspots=hotspots, weather_summary=weather, forecast_text=fc_text, series=series,
     )
 
 
@@ -198,6 +200,11 @@ def run_and_export(cfg: Config | None = None, *, demo: bool = False, day: date |
 
     tif = export.write_geotiff(res.index, res.grid, out / "index.tif")
     png = export.write_png_overlay(res.index, out / "index.png")
+    if res.series:
+        import json as _json
+        (out / "series.json").write_text(
+            _json.dumps(res.series, ensure_ascii=False), encoding="utf-8"
+        )
     js = export.write_localities_json(
         res.index, res.grid, cfg, out / "localities.json",
         mode=res.mode, sources_used=res.sources_used,

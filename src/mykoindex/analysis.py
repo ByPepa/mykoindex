@@ -47,6 +47,54 @@ def find_hotspots(index_field, forest01, grid, cfg) -> list[dict]:
     return selected
 
 
+def build_series(cfg, grid, daily_stack, index_field, t_local, forecast, ncx: int = 18) -> dict:
+    """Hrubá mřížka časových řad pro klik na mapě: 30denní srážky + index + teplota
+    + předpověď + parametry. Umožní frontendu spočítat vlhkost a odhad pro libovolný bod.
+    """
+    lon_min, lat_min, lon_max, lat_max = grid.bbox
+    step = (lon_max - lon_min) / ncx
+    ncy = max(2, int(round((lat_max - lat_min) / step)))
+    lons = lon_min + (np.arange(ncx) + 0.5) * step
+    lats = lat_max - (np.arange(ncy) + 0.5) * ((lat_max - lat_min) / ncy)
+    LON, LAT = np.meshgrid(lons, lats)
+    flon, flat = LON.ravel(), LAT.ravel()
+
+    idxv = np.atleast_1d(np.asarray(grid.sample(index_field, flon, flat))).reshape(-1)
+    tempv = np.atleast_1d(np.asarray(grid.sample(t_local, flon, flat))).reshape(-1)
+    D = int(daily_stack.shape[0])
+    precip = np.zeros((flon.size, D))
+    for d in range(D):
+        precip[:, d] = np.atleast_1d(np.asarray(grid.sample(daily_stack[d], flon, flat))).reshape(-1)
+
+    cells = [
+        {"lon": round(float(flon[i]), 4), "lat": round(float(flat[i]), 4),
+         "index": round(float(idxv[i]), 1), "temp": round(float(tempv[i]), 1),
+         "precip": [round(float(x), 1) for x in precip[i]]}
+        for i in range(flon.size)
+    ]
+
+    fcast = None
+    if forecast is not None:
+        fcast = {
+            "dates": [str(x) for x in forecast.dates],
+            "precip": [round(float(x), 1) for x in forecast.precip_mm],
+            "temp": [None if not np.isfinite(x) else round(float(x), 1) for x in forecast.temp_c],
+        }
+
+    m = cfg.model
+    fc = cfg.raw.get("forecast", {})
+    params = {
+        "tau_days": float(m.get("tau_days", 12)),
+        "saturation_mm": float(m.get("api_saturation_mm", 60)),
+        "w_moist": float(m.get("w_moist", 0.55)), "w_temp": float(m.get("w_temp", 0.45)),
+        "t_min": float(m.get("t_min", 5)), "t_opt": float(m.get("t_opt", 14)), "t_max": float(m.get("t_max", 25)),
+        "soak_mm": float(fc.get("soak_mm", 20)), "lag": fc.get("fruiting_lag_days", [7, 12]),
+        "ideal_min": float(cfg.raw.get("history", {}).get("ideal_min_score", 60)),
+    }
+    return {"ncx": ncx, "ncy": ncy, "window_days": D, "cells": cells,
+            "forecast": fcast, "params": params}
+
+
 def weather_summary(cfg, daily_stack, moisture_mean: float, temp_mean_c: float) -> str:
     """Český popis vývoje počasí za posledních N dní z denních srážkových polí."""
     n = int(cfg.raw.get("weather_summary", {}).get("days", 20))

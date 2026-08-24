@@ -87,6 +87,7 @@ jobs:
           mkdir -p site/out
           cp web/index.html site/index.html
           cp out/localities.json site/out/
+          cp out/series.json site/out/ 2>/dev/null || true
           cp out/index.png site/out/ 2>/dev/null || true
           cp out/ideal30.png site/out/ 2>/dev/null || true
           cp out/history.json site/out/ 2>/dev/null || true

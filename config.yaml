@@ -132,7 +132,7 @@ sources:
   netatmo:
     api_url: "https://api.netatmo.com/api/getpublicdata"
     token_url: "https://api.netatmo.com/oauth2/token"
-    tile_deg: 0.25     # dlaždicování; větší = méně volání (velká oblast), riziko 503
+    tile_deg: 0.3      # dlaždicování; větší = méně volání (velká oblast), riziko 503
     max_tiles: 120     # pojistka proti přetížení API na obří oblasti
   temperature:
     # "stations" = ČHMÚ + Netatmo pozemní stanice (bez klíče, reálný čas) [default]

@@ -36,6 +36,9 @@
   .score-tip.v-pockej{color:#8a6d00;} .score-tip.v-sucho{color:#a52820;}
   .city-label { color:#222; font-weight:600; font-size:11.5px; text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 3px #fff; white-space:nowrap; }
   .pop b { font-size:13px; } .pop .hist { margin-top:4px; font-size:11.5px; color:#4a5a4a; }
+  .pop .est { margin-top:6px; font-size:12px; line-height:1.4; border-top:1px solid #e3e6e0; padding-top:5px; }
+  .pop .chartlabel { margin-top:8px; font-size:10.5px; color:#5a6a5a; }
+  .clickpop .leaflet-popup-content { margin:10px 12px; }
   .disclaimer { position:absolute; bottom:8px; left:8px; right:8px; z-index:1000;
     background:rgba(28,42,28,.82); color:#fff; font-size:11px; padding:6px 10px; border-radius:8px; max-width:680px; }
   @media (max-width:600px){ .disclaimer{ font-size:10px; } #title{ font-size:14px; } }
@@ -74,6 +77,79 @@ function sparkline(tl){
     '<circle cx="'+xs(tl.length-1)+'" cy="'+ys(last.score)+'" r="2.4" fill="#1c2a1c"/></svg>';
 }
 
+// --- pomůcky pro klik na mapu (graf srážek/vlhkosti + odhad) ---
+function verdictFor(score, legend){
+  let best="Sucho";
+  (legend||[]).slice().sort((a,b)=>a.min-b.min).forEach(l=>{ if(score>=l.min) best=l.label; });
+  return best.replace("Ideál / ","");
+}
+function fmtD(iso){ const d=new Date(iso+"T00:00:00"); return d.getDate()+". "+(d.getMonth()+1)+"."; }
+function addDays(iso,n){ const d=new Date(iso+"T00:00:00"); d.setDate(d.getDate()+n);
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function apiTraj(precip, tau){ let a=0; return precip.map(p=>{ a=a*Math.exp(-1/tau)+p; return a; }); }
+function nearestCell(series, lat, lon){
+  let best=null, bd=1e9;
+  series.cells.forEach(c=>{ const d=(c.lat-lat)**2+(c.lon-lon)**2; if(d<bd){bd=d; best=c;} });
+  return best;
+}
+// graf: sloupce = srážky (minulost tmavě + předpověď světle), čára = vlhkost 0-1
+function chartSVG(cell, series){
+  const past = cell.precip.slice().reverse();           // chronologicky: nejstarší → dnes
+  const fp = series.forecast? series.forecast.precip : [];
+  const full = past.concat(fp);
+  const W=290,H=118,PL=6,PR=6,PT=8,PB=16, iw=W-PL-PR, ih=H-PT-PB;
+  const n=full.length, bw=iw/n, pmax=Math.max(5,...full);
+  const tau=series.params.tau_days, sat=series.params.saturation_mm;
+  const moist=apiTraj(full,tau).map(a=>Math.min(1,a/sat));
+  const todayX=PL+past.length*bw;
+  let bars="";
+  full.forEach((v,i)=>{ const bh=ih*v/pmax; const x=PL+i*bw;
+    const col = i<past.length ? "#3a6ea5" : "#a9cdec";
+    bars+='<rect x="'+(x+0.3)+'" y="'+(PT+ih-bh)+'" width="'+Math.max(0.6,bw-0.6)+'" height="'+bh+'" fill="'+col+'"/>';
+  });
+  const line=moist.map((m,i)=>(PL+i*bw+bw/2)+","+(PT+ih-m*ih)).join(" ");
+  return '<svg width="'+W+'" height="'+H+'" style="display:block">'+
+    '<line x1="'+PL+'" y1="'+(PT+ih*0.4)+'" x2="'+(W-PR)+'" y2="'+(PT+ih*0.4)+'" stroke="#2ecc40" stroke-dasharray="2 2" stroke-width="1"/>'+
+    bars +
+    '<polyline points="'+line+'" fill="none" stroke="#1a9933" stroke-width="1.8"/>'+
+    '<line x1="'+todayX+'" y1="'+PT+'" x2="'+todayX+'" y2="'+(PT+ih)+'" stroke="#333" stroke-width="1"/>'+
+    '<text x="'+PL+'" y="'+(H-4)+'" font-size="9" fill="#666">−'+past.length+' d</text>'+
+    '<text x="'+(todayX-8)+'" y="'+(H-4)+'" font-size="9" fill="#333">dnes</text>'+
+    (fp.length?'<text x="'+(W-PR-24)+'" y="'+(H-4)+'" font-size="9" fill="#666">+'+fp.length+' d</text>':'')+
+    '<text x="'+(W-PR-2)+'" y="'+(PT+8)+'" font-size="9" fill="#3a6ea5" text-anchor="end">max '+pmax.toFixed(0)+' mm</text>'+
+    '</svg>';
+}
+function explain(cell, series, legend){
+  const p=series.params, past=cell.precip.slice().reverse();
+  const total=cell.precip.reduce((a,b)=>a+b,0);
+  const apiNow=apiTraj(past,p.tau_days).slice(-1)[0], moistNow=Math.min(1,apiNow/p.saturation_mm);
+  const tempOK = cell.temp>=p.t_min && cell.temp<=p.t_max;
+  const v=verdictFor(cell.index, legend);
+  let txt='<b>📍 Zde:</b> index '+cell.index.toFixed(0)+'/100 — <b>'+v+'</b>'+
+    '<div class="hist">Za '+series.window_days+' dní ~'+total.toFixed(0)+' mm · vlhkost '+
+    Math.round(moistNow*100)+' % · teplota ~'+cell.temp.toFixed(0)+' °C</div>';
+  // odhad z předpovědi (soak = vydatný déšť ≥ soak_mm za 3 dny) + fruktifikační zpoždění
+  let est="";
+  const fc=series.forecast;
+  if(fc){
+    const fp=fc.precip, ft=fc.temp; let soak=-1;
+    for(let i=0;i<fp.length;i++){ const r=(fp[i-1]||0)+fp[i]+(fp[i+1]||0);
+      if(r>=p.soak_mm && (ft[i]==null || (ft[i]>=p.t_min && ft[i]<=p.t_max))){ soak=i; break; } }
+    if(soak>=0){
+      const mm=((fp[soak-1]||0)+fp[soak]+(fp[soak+1]||0)).toFixed(0);
+      const d0=addDays(fc.dates[soak],p.lag[0]), d1=addDays(fc.dates[soak],p.lag[1]);
+      est='Předpověď: kolem <b>'+fmtD(fc.dates[soak])+'</b> ~'+mm+' mm. Pokud teploty vydrží, houby by mohly růst zhruba <b>'+fmtD(d0)+'–'+fmtD(d1)+'</b>.';
+    } else if(moistNow>0.55 && tempOK){
+      est='Vláha i teplota sedí. Pokud zůstane počasí jako teď, houby tu mohou naskočit v příštích <b>~7–12 dnech</b>.';
+    } else if(fp.reduce((a,b)=>a+b,0)<5){
+      est='V předpovědi je sucho. Kdyby přišlo ~'+p.soak_mm+' mm deště, houby by přišly zhruba za <b>'+p.lag[0]+'–'+p.lag[1]+' dní</b> po něm.';
+    } else {
+      est='Jen menší srážky – spíš vyčkávat. Vydatnější déšť by nastartoval růst za ~'+p.lag[0]+'–'+p.lag[1]+' dní.';
+    }
+  }
+  return txt + (est?'<div class="est">'+est+'</div>':'');
+}
+
 (async function(){
   const map = L.map("map", {zoomControl:true}).setView([49.55, 17.6], 9);
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
@@ -88,6 +164,7 @@ function sparkline(tl){
   const [lonMin,latMin,lonMax,latMax] = data.bbox;
   const bounds = [[latMin,lonMin],[latMax,lonMax]];
   const hist = data.history||{};
+  let series=null; try { series = await loadJSON("series.json"); } catch(e){}
 
   // dva overlaye: dnešní index + nedávno ideálně (30 dní)
   const todayOv = L.imageOverlay(BASE+(data.overlay||"index.png"), bounds, {opacity:0.72, interactive:false});
@@ -172,6 +249,21 @@ function sparkline(tl){
     L.marker([c.lat,c.lon],{ icon:L.divIcon({className:"", html:'<div class="city-label">'+c.name+'</div>', iconSize:[0,0]}),
       interactive:false, keyboard:false }).addTo(map);
   });
+
+  // --- klik kamkoli na mapu → graf srážek/vlhkosti + odhad pro danou oblast ---
+  if (series){
+    const cpop = L.popup({maxWidth:320, className:"clickpop"});
+    map.on("click", e=>{
+      const {lat,lng}=e.latlng;
+      if(lat<latMin||lat>latMax||lng<lonMin||lng>lonMax) return; // jen uvnitř oblasti
+      const cell = nearestCell(series, lat, lng);
+      if(!cell) return;
+      const html='<div class="pop">'+explain(cell, series, data.legend)+
+        '<div class="chartlabel">Srážky (sloupce) &amp; vlhkost (čára) — 30 dní zpět + předpověď</div>'+
+        chartSVG(cell, series)+'</div>';
+      cpop.setLatLng(e.latlng).setContent(html).openOn(map);
+    });
+  }
 
   if (data.disclaimer) document.getElementById("disclaimer").innerHTML = data.disclaimer;
 })();

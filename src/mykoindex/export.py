@@ -16,23 +16,30 @@ from .index import verdict
 
 log = logging.getLogger(__name__)
 
-# Barevná škála mykoindexu: sucho (červená) → ideál (zelená)
+# Barevná škála mykoindexu: sucho (červená) → ideál (zelená). Syté stopy pro kontrast.
 # stopy: (index0-1, R, G, B)
 _STOPS = [
-    (0.00, 0.80, 0.16, 0.13),  # sytě červená „sucho"
-    (0.32, 0.90, 0.45, 0.15),  # oranžová „počkej"
-    (0.50, 0.95, 0.80, 0.20),  # žlutá
-    (0.70, 0.55, 0.78, 0.20),  # zelenožlutá „dá se"
-    (1.00, 0.10, 0.60, 0.20),  # sytě zelená „ideál / vyraž"
+    (0.00, 0.86, 0.08, 0.08),  # sytě červená „sucho"
+    (0.28, 0.97, 0.42, 0.09),  # oranžová
+    (0.48, 1.00, 0.86, 0.12),  # žlutá „počkej"
+    (0.66, 0.52, 0.80, 0.12),  # svěží zelená „dá se"
+    (1.00, 0.02, 0.58, 0.10),  # sytě zelená „ideál / vyraž"
 ]
 
 
+def _contrast(norm: np.ndarray) -> np.ndarray:
+    """Zvýší kontrast: smootherstep tlačí střední hodnoty k okrajům."""
+    t = np.clip(norm, 0.0, 1.0)
+    return t * t * t * (t * (t * 6.0 - 15.0) + 10.0)
+
+
 def _colormap(norm: np.ndarray) -> np.ndarray:
-    """norm ∈ [0,1] → RGB (0-1) lineární interpolací mezi stopami."""
+    """norm ∈ [0,1] → RGB (0-1) s kontrastní křivkou a interpolací mezi stopami."""
+    t = _contrast(norm)
     xs = np.array([s[0] for s in _STOPS])
-    r = np.interp(norm, xs, [s[1] for s in _STOPS])
-    g = np.interp(norm, xs, [s[2] for s in _STOPS])
-    b = np.interp(norm, xs, [s[3] for s in _STOPS])
+    r = np.interp(t, xs, [s[1] for s in _STOPS])
+    g = np.interp(t, xs, [s[2] for s in _STOPS])
+    b = np.interp(t, xs, [s[3] for s in _STOPS])
     return np.stack([r, g, b], axis=-1)
 
 
@@ -68,8 +75,8 @@ def write_png_overlay(index_field: np.ndarray, path: str | Path) -> Path:
     idx = np.clip(np.nan_to_num(index_field, nan=0.0), 0, 100)
     norm = idx / 100.0
     rgb = _colormap(norm)
-    # alfa roste s indexem, ať OSM prosvítá tam, kde je sucho
-    alpha = 0.30 + 0.50 * norm
+    # sytější, kontrastnější krytí (méně muddy střed)
+    alpha = 0.45 + 0.45 * _contrast(norm)
     rgba = np.concatenate([rgb, alpha[..., None]], axis=-1)
     rgba8 = (np.clip(rgba, 0, 1) * 255).astype(np.uint8)
     try:
